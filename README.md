@@ -3,4 +3,4 @@ OpenGL
 Deferred rendered with point light
 Next step shadows.
 
-![alt text](../master/pictures/image.png)/2b.png)
+![alt text](SimpleENG/master/pictures/image.png)/2b.png)
