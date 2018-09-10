@@ -1,6 +1,11 @@
 # SimpleENG
 OpenGL
-Deferred rendered with point light
-Next step shadows.
+## Features
 
-<img src="https://github.com/VictorOrts/SimpleENG/blob/master/pictures/2b.PNG" alt="Koa middleware framework for nodejs"/>
+* Written in portable C++. C++-11 .
+  * [x] Deferred Renderer Point Light
+  * [ ] Shadows
+
+
+
+<img src="https://github.com/VictorOrts/SimpleENG/blob/master/pictures/2b.PNG" alt="Deferred PointLight"/>
