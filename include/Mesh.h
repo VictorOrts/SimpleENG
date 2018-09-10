@@ -11,6 +11,8 @@ public:
 	 void Load(std::string obj);
 	 unsigned int vao, evo, nindex;
 	 void createquad();
+	 unsigned int diffuse_texture;
+	 unsigned int specular_texture;
 protected:
 	
 	std::vector<float> vertex;

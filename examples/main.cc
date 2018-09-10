@@ -22,10 +22,22 @@ Camera camera(glm::vec3(0.0f, 5.0f, 15.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
-
+const unsigned int NR_LIGHTS = 32;
 // timing
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
+
+
+std::vector<glm::vec3> lightPositions;
+std::vector<glm::vec3> lightColors;
+
+struct GBuffer {
+	unsigned int gBuffer;
+	unsigned int gPosition, gNormal, gAlbedoSpec;
+};
+
+void GBufferPass(unsigned int program, std::shared_ptr<Mesh> mesh, std::vector<glm::vec3> objectPos, glm::mat4 modelPosition);
+void LightingPass(unsigned int program, std::shared_ptr<Mesh> mesh, GBuffer tmp);
 int main(int argc, char**argv) {
 
 	glfwInit();
@@ -59,37 +71,20 @@ int main(int argc, char**argv) {
 	Mesh2B->Load("2b.obj");
 	unsigned int simpleProgram = OpenGL::CreateShader("vertex.glsl", "fragment.glsl");
 	
-	unsigned int textureDiffuse = OpenGL::LoadTexture("diffuse2B.png");
-	unsigned int textureSpecular = OpenGL::LoadTexture("specular2B.png");
+	Mesh2B->diffuse_texture = OpenGL::LoadTexture("diffuse2B.png");
+	Mesh2B->specular_texture = OpenGL::LoadTexture("specular2B.png");
 
 
 	// configure g-buffer framebuffer
 	// ------------------------------
-	unsigned int gBuffer;
-	glGenFramebuffers(1, &gBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-	unsigned int gPosition, gNormal, gAlbedoSpec;
-	// position color buffer
-	glGenTextures(1, &gPosition);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
-	// normal color buffer
-	glGenTextures(1, &gNormal);
-	glBindTexture(GL_TEXTURE_2D, gNormal);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
-	// color + specular color buffer
-	glGenTextures(1, &gAlbedoSpec);
-	glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedoSpec, 0);
+
+	GBuffer gBufferThis;
+
+	glGenFramebuffers(1, &gBufferThis.gBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, gBufferThis.gBuffer);
+	gBufferThis.gPosition = OpenGL::CreateGBufferTexture(0, SCR_WIDTH, SCR_HEIGHT);
+	gBufferThis.gNormal = OpenGL::CreateGBufferTexture(1, SCR_WIDTH, SCR_HEIGHT);
+	gBufferThis.gAlbedoSpec = OpenGL::CreateGBufferTexture(2, SCR_WIDTH, SCR_HEIGHT);
 	// tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
 	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
 	glDrawBuffers(3, attachments);
@@ -104,21 +99,20 @@ int main(int argc, char**argv) {
 		std::cout << "Framebuffer not complete!" << std::endl;
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	const unsigned int NR_LIGHTS = 32;
-	std::vector<glm::vec3> lightPositions;
-	std::vector<glm::vec3> lightColors;
+	
+
 	srand(13);
 	for (unsigned int i = 0; i < NR_LIGHTS; i++)
 	{
 		// calculate slightly random offsets
-		float xPos = ((rand() % 100) / 100.0) * 7.0 - 2.0;
-		float yPos = ((rand() % 100) / 100.0) * 11.0 - 4.0;
-		float zPos = ((rand() % 100) / 100.0) * 7.0 - 2.0;
+		float xPos = ((rand() % 100) / 100.0f) * 7.0f - 2.0f;
+		float yPos = ((rand() % 100) / 100.0f) * 11.0f - 4.0f;
+		float zPos = ((rand() % 100) / 100.0f) * 7.0f - 2.0f;
 		lightPositions.push_back(glm::vec3(xPos, yPos, zPos));
 		// also calculate random color
-		float rColor = ((rand() % 100) / 200.0f) + 0.5; // between 0.5 and 1.0
-		float gColor = ((rand() % 100) / 200.0f) + 0.5; // between 0.5 and 1.0
-		float bColor = ((rand() % 100) / 200.0f) + 0.5; // between 0.5 and 1.0
+		float rColor = ((rand() % 100) / 200.0f) + 0.5f; // between 0.5 and 1.0
+		float gColor = ((rand() % 100) / 200.0f) + 0.5f; // between 0.5 and 1.0
+		float bColor = ((rand() % 100) / 200.0f) + 0.5f; // between 0.5 and 1.0
 		lightColors.push_back(glm::vec3(rColor, gColor, bColor));
 	}
 	unsigned int lighting = OpenGL::CreateShader("lightVert.glsl", "lightFrag.glsl");
@@ -135,81 +129,31 @@ int main(int argc, char**argv) {
 	objectPositions.push_back(glm::vec3(5.0, 0, 5.0));
 	glm::mat4 modelPosition;
 	while (!glfwWindowShouldClose(win)) {
-		float currentFrame = glfwGetTime();
+		float currentFrame = (float)glfwGetTime();
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 		processInput(win);
 		glClearColor(0.f, 0.f, 0.f, 1.0f);
-		////
-		glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+		//////////////////////////////
+		//		GBUFFER PASS		//
+		/////////////////////////////
+		glBindFramebuffer(GL_FRAMEBUFFER, gBufferThis.gBuffer);
 		glEnable(GL_DEPTH_TEST);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glUseProgram(simpleProgram);
-		
-		glBindVertexArray(Mesh2B->vao);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, textureDiffuse);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, textureSpecular);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Mesh2B->evo);
-		glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-		glm::mat4 view = camera.GetViewMatrix();
-
-		OpenGL::setUniform("projectionview",simpleProgram, projection*view);
-		
-	
-		for (unsigned int i = 0; i < objectPositions.size(); i++)
-		{
-			modelPosition = glm::mat4();
-			modelPosition = glm::translate(modelPosition, objectPositions[i]);
-			modelPosition = glm::scale(modelPosition, glm::vec3(0.05f));
-			OpenGL::setUniform("model", simpleProgram, modelPosition);
-			glDrawElements(GL_TRIANGLES, Mesh2B->nindex, GL_UNSIGNED_INT, (void*)0);
-		}
-	
-		
-		
+		glUseProgram(simpleProgram);	
+		GBufferPass(simpleProgram, Mesh2B, objectPositions, modelPosition);
 		glBindVertexArray(0);
 		glUseProgram(0);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		//////////////////////////////
+		//		LIGHTING PASS		//
+		/////////////////////////////
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glDisable(GL_DEPTH_TEST);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glUseProgram(lighting);
-		glBindVertexArray(MeshQuad->vao);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, MeshQuad->evo);
 
-		OpenGL::setUniform("gPosition", lighting, 0);
-		OpenGL::setUniform("gNormal", lighting, 1);
-		OpenGL::setUniform("gAlbedoSpec", lighting, 2);
-
-
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, gPosition);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, gNormal);
-		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
-;
-		for (unsigned int i = 0; i < lightPositions.size(); i++)
-		{
-			OpenGL::setUniform("lights[" + std::to_string(i) + "].Position", lighting, lightPositions[i]);
-			OpenGL::setUniform("lights[" + std::to_string(i) + "].Color", lighting, lightColors[i]);
-			
-			const float constant = 1.0; 
-			const float linear = 0.7;
-			const float quadratic = 1.8;
-			OpenGL::setUniform("lights[" + std::to_string(i) + "].Linear", lighting, linear);
-			OpenGL::setUniform("lights[" + std::to_string(i) + "].Quadratic", lighting, quadratic);
-			// then calculate radius of light volume/sphere
-			const float maxBrightness = std::fmaxf(std::fmaxf(lightColors[i].r, lightColors[i].g), lightColors[i].b);
-			float radius = (-linear + std::sqrt(linear * linear - 4 * quadratic * (constant - (256.0f / 5.0f) * maxBrightness))) / (2.0f * quadratic);
-			OpenGL::setUniform("lights[" + std::to_string(i) + "].Radius", lighting, radius);
-		}
-		OpenGL::setUniform("viewPos", lighting, camera.Position);
-		glDrawElements(GL_TRIANGLES, MeshQuad->nindex, GL_UNSIGNED_INT, (void*)0);
+		LightingPass(lighting, MeshQuad, gBufferThis);
 		///////////////
 		glBindVertexArray(0);
 		glUseProgram(0);
@@ -217,12 +161,9 @@ int main(int argc, char**argv) {
 
 		////////////////////////
 
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // write to default framebuffer
-												   // blit to default framebuffer. Note that this may or may not work as the internal formats of both the FBO and default framebuffer have to match.
-												   // the internal formats are implementation defined. This works on all of my systems, but if it doesn't on yours you'll likely have to write to the 		
-												   // depth buffer in another shader stage (or somehow see to match the default framebuffer's internal format with the FBO's internal format).
-		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, 800, SCR_WIDTH, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferThis.gBuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); 
+		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		glfwSwapBuffers(win);
@@ -266,16 +207,16 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
 	if (firstMouse)
 	{
-		lastX = xpos;
-		lastY = ypos;
+		lastX = (float)xpos;
+		lastY = (float)ypos;
 		firstMouse = false;
 	}
 
-	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+	float xoffset = (float)xpos - lastX;
+	float yoffset = lastY - (float)ypos; // reversed since y-coordinates go from bottom to top
 
-	lastX = xpos;
-	lastY = ypos;
+	lastX = (float)xpos;
+	lastY = (float)ypos;
 
 	camera.ProcessMouseMovement(xoffset, yoffset);
 }
@@ -284,5 +225,74 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-	camera.ProcessMouseScroll(yoffset);
+	camera.ProcessMouseScroll((float)yoffset);
+}
+
+void GBufferPass(unsigned int program, std::shared_ptr<Mesh> mesh,std::vector<glm::vec3> objectPos,glm::mat4 modelPosition) {
+	glEnable(GL_DEPTH_TEST);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glUseProgram(program);
+
+	glBindVertexArray(mesh->vao);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, mesh->diffuse_texture);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, mesh->specular_texture);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->evo);
+	glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+	glm::mat4 view = camera.GetViewMatrix();
+
+	OpenGL::setUniform("projectionview", program, projection*view);
+
+
+	for (unsigned int i = 0; i < objectPos.size(); i++)
+	{
+		modelPosition = glm::mat4();
+		modelPosition = glm::translate(modelPosition, objectPos[i]);
+		modelPosition = glm::scale(modelPosition, glm::vec3(0.05f));
+		OpenGL::setUniform("model", program, modelPosition);
+		glDrawElements(GL_TRIANGLES, mesh->nindex, GL_UNSIGNED_INT, (void*)0);
+	}
+
+
+
+	glBindVertexArray(0);
+	glUseProgram(0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void LightingPass(unsigned int program,std::shared_ptr<Mesh> mesh,GBuffer tmp) {
+	glBindVertexArray(mesh->vao);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->evo);
+
+	OpenGL::setUniform("gPosition", program, 0);
+	OpenGL::setUniform("gNormal", program, 1);
+	OpenGL::setUniform("gAlbedoSpec", program, 2);
+
+
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tmp.gPosition);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, tmp.gNormal);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, tmp.gAlbedoSpec);
+	;
+	for (unsigned int i = 0; i < lightPositions.size(); i++)
+	{
+		OpenGL::setUniform("lights[" + std::to_string(i) + "].Position", program, lightPositions[i]);
+		OpenGL::setUniform("lights[" + std::to_string(i) + "].Color", program, lightColors[i]);
+
+		const float constant = 1.0f;
+		const float linear = 0.7f;
+		const float quadratic = 1.8f;
+		OpenGL::setUniform("lights[" + std::to_string(i) + "].Linear", program, linear);
+		OpenGL::setUniform("lights[" + std::to_string(i) + "].Quadratic", program, quadratic);
+		// then calculate radius of light volume/sphere
+		const float maxBrightness = std::fmaxf(std::fmaxf(lightColors[i].r, lightColors[i].g), lightColors[i].b);
+		float radius = (-linear + std::sqrt(linear * linear - 4 * quadratic * (constant - (256.0f / 5.0f) * maxBrightness))) / (2.0f * quadratic);
+		OpenGL::setUniform("lights[" + std::to_string(i) + "].Radius", program, radius);
+	}
+	OpenGL::setUniform("viewPos", program, camera.Position);
+	glDrawElements(GL_TRIANGLES, mesh->nindex, GL_UNSIGNED_INT, (void*)0);
 }

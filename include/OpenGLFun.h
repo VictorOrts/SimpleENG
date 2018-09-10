@@ -16,6 +16,7 @@ namespace OpenGL{
 	void setUniform(const std::string &name, unsigned int program, int value);
 	void setUniform(const std::string &name, unsigned int program, float value);
 	unsigned int LoadTexture(std::string name);
+	unsigned int CreateGBufferTexture(int tipo,int w, int h);
 }
 
 #endif // !_H_OPENGL_
