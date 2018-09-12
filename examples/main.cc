@@ -11,6 +11,7 @@
 #include "deps/glm/gtc/matrix_transform.hpp"
 #include "deps/glm/gtc/type_ptr.hpp"
 
+#include "Gui.h"
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -100,7 +101,7 @@ int main(int argc, char**argv) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	
-
+	GUI thisGUI;
 	srand(13);
 	for (unsigned int i = 0; i < NR_LIGHTS; i++)
 	{
@@ -137,6 +138,7 @@ int main(int argc, char**argv) {
 		//////////////////////////////
 		//		GBUFFER PASS		//
 		/////////////////////////////
+		thisGUI.Frame();
 		glBindFramebuffer(GL_FRAMEBUFFER, gBufferThis.gBuffer);
 		glEnable(GL_DEPTH_TEST);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -158,7 +160,7 @@ int main(int argc, char**argv) {
 		glBindVertexArray(0);
 		glUseProgram(0);
 
-
+		thisGUI.Render();
 		////////////////////////
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferThis.gBuffer);

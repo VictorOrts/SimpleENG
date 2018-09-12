@@ -86,3 +86,7 @@ void Mesh::createquad() {
 		nindex = index.size();
 		printf("\nVao %d Evo %d Index %d", vao, evo, nindex);
 }
+
+void Mesh::Draw() {
+
+}

@@ -13,6 +13,7 @@ public:
 	 void createquad();
 	 unsigned int diffuse_texture;
 	 unsigned int specular_texture;
+	 void Draw();
 protected:
 	
 	std::vector<float> vertex;
