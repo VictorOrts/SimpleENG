@@ -14,8 +14,15 @@ Mesh::Mesh() {
 Mesh::~Mesh() {
 	printf("Deleted");
 }
+static std::string GetFilePathExtension(const std::string &FileName) {
+	if (FileName.find_last_of(".") != std::string::npos)
+		return FileName.substr(FileName.find_last_of(".") + 1);
+	return "";
+}
 
 void Mesh::Load(std::string obj) {
+
+	///////////////////
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::string err;
